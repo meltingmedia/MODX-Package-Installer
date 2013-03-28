@@ -1,5 +1,5 @@
 {
-    "name": "meltingmedia/composer",
+    "name": "meltingmedia/package-installer",
     "description": "Helper to install MODX packages from providers or from local packages.",
     "type": "library",
     "keywords": "modx, helper",
@@ -18,7 +18,7 @@
     },
     "autoload": {
         "psr-0": {
-            "meltingmedia\\packageinstaller": "src/"
+            "meltingmedia\\package-installer": "src/"
         }
     }
 }
