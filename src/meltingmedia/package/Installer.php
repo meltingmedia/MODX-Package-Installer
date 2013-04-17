@@ -1,6 +1,6 @@
-<?php namespace meltingmedia;
+<?php namespace meltingmedia\package;
 
-class PackageInstaller
+class Installer
 {
     public $modx;
     public $config = array();

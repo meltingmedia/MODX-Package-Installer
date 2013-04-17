@@ -1,9 +1,8 @@
 {
-    "name": "meltingmedia/package-installer",
+    "name": "meltingmedia/package",
     "description": "Helper to install MODX packages from providers or from local packages.",
     "type": "library",
-    "keywords": "modx, helper",
-    "time": "2013-03-28",
+    "keywords": ["modx", "helper", "package"],
     "license": "MIT",
     "authors": [
         {
@@ -18,7 +17,7 @@
     },
     "autoload": {
         "psr-0": {
-            "meltingmedia\\package-installer": "src/"
+            "meltingmedia\\package": "src/"
         }
     }
 }
