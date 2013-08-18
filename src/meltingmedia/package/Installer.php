@@ -16,18 +16,18 @@ class Installer
 
 
 
-    public function installPackage($providerName, $packageName, array $options = array())
+    public function installPackage($providerURL, $packageName, array $options = array())
     {
-        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerName);
+        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerURL);
 
         // Instantiate the provider if needed
-        if (!array_key_exists($providerName, $this->providers)) {
+        if (!array_key_exists($providerURL, $this->providers)) {
             $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
-            $this->initProvider($providerName);
+            $this->initProvider($providerURL);
         }
 
         /** @var $provider \modTransportProvider */
-        $provider =& $this->providers[$providerName];
+        $provider =& $this->providers[$providerURL];
         $provider->getClient();
 
         /** @var \modRestResponse $response */
@@ -100,19 +100,24 @@ class Installer
     /**
      * Initialize the given Package Provider
      *
-     * @param string $name The provider name
+     * @param string $url The provider URL
+     *
      * @return bool Either if the initialization succeed of failed
      */
-    public function initProvider($name)
+    public function initProvider($url)
     {
-        if ($this->config['debug']) $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $name);
-        if (!$this->providers[$name] || !$this->providers[$name] instanceof \modTransportProvider) {
-            if ($this->config['debug']) $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $name);
+        if ($this->config['debug']) {
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url);
+        }
+        if (!$this->providers[$url] || !$this->providers[$url] instanceof \modTransportProvider) {
+            if ($this->config['debug']) $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url);
             /** @var \modTransportProvider $provider */
-            $provider = $this->modx->getObject('transport.modTransportProvider', array('name' => $name));
+            $provider = $this->modx->getObject('transport.modTransportProvider', array('name' => $url));
             if ($provider) {
-                if ($this->config['debug']) $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $name . ' instantiated');
-                $this->providers[$name] =& $provider;
+                if ($this->config['debug']) {
+                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $url . ' instantiated');
+                }
+                $this->providers[$url] =& $provider;
 
                 return true;
             }
@@ -123,18 +128,18 @@ class Installer
         return true;
     }
 
-    public function getFromProvider($providerName, $packageName)
+    public function getFromProvider($providerURL, $packageName)
     {
-        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to download package '. $packageName .' from '. $providerName);
+        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to download package '. $packageName .' from '. $providerURL);
 
         // Instantiate the provider if needed
-        if (!array_key_exists($providerName, $this->providers)) {
+        if (!array_key_exists($providerURL, $this->providers)) {
             $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
-            $this->initProvider($providerName);
+            $this->initProvider($providerURL);
         }
 
         /** @var $provider \modTransportProvider */
-        $provider =& $this->providers[$providerName];
+        $provider =& $this->providers[$providerURL];
         $provider->getClient();
 
         /** @var \modRestResponse $response */
