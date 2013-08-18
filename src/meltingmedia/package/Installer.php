@@ -6,7 +6,10 @@ class Installer
 {
     public $modx;
     public $config = array();
+
     public $providers = array();
+
+    protected $currentProvider;
 
     public function __construct(\modX &$modx, array $options = array())
     {
@@ -14,9 +17,12 @@ class Installer
         $this->config = array_merge(array(
             'debug' => false,
         ), $options);
+
+        $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
     }
 
     /**
+     * Wrapper method to install a transport package
      *
      * @param string $packageName The package name you want to install
      * @param array $options An optional array of options to be used during package installation
@@ -27,6 +33,9 @@ class Installer
     public function installPackage($packageName, array $options = array(), $providerURL = 'http://rest.modx.com/extras/')
     {
         $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerURL);
+        if ('local' === $providerURL) {
+            return $this->installLocal($packageName, $options);
+        }
 
         // Instantiate the provider if needed
         if (!array_key_exists($providerURL, $this->providers)) {
@@ -70,26 +79,19 @@ class Installer
                         file_get_contents($package->location)
                     );
 
-                    /** @var \modTransportPackage $tmpPackage */
-                    $tmpPackage = $this->modx->newObject('transport.modTransportPackage');
-                    $tmpPackage->set('signature', $package->signature);
-                    $tmpPackage->fromArray(array(
-                        'created' => date('Y-m-d h:i:s'),
-                        'updated' => null,
-                        'state' => 1,
-                        'workspace' => 1,
-                        'provider' => $provider->get('id'),
-                        'source' => $package->signature.'.transport.zip',
+                    $data = array(
+                        'signature' => $signature,
+                        'provider_id' => $provider->get('id'),
                         'package_name' => $package->name,
                         'version_major' => $package->version_major,
                         'version_minor' => $package->version_minor,
                         'version_patch' => $package->version_patch,
                         'release' => $package->vrelease,
                         'release_index' => $package->vrelease_index,
-                    ));
+                    );
 
-                    $success = $tmpPackage->save();
-                    if ($success) {
+                    $tmpPackage = $this->createTransport($data);
+                    if ($tmpPackage) {
                         $installed = $tmpPackage->install($options);
                         if ($installed) {
                             $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
@@ -117,12 +119,13 @@ class Installer
      */
     public function initProvider($url)
     {
-        $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
         if ($this->config['debug']) {
             $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url);
         }
         if (!$this->providers[$url] || !$this->providers[$url] instanceof \modTransportProvider) {
-            if ($this->config['debug']) $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url);
+            if ($this->config['debug']) {
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url);
+            }
             /** @var \modTransportProvider $provider */
             $provider = $this->modx->getObject('transport.modTransportProvider', array('name' => $url));
             if ($provider) {
@@ -138,5 +141,111 @@ class Installer
         }
 
         return true;
+    }
+
+    /**
+     * Wrapper method to create the modTransportPackage record
+     *
+     * @param array $data An array of data to be used to create the modTransportPackage object
+     *
+     * @return bool|\modTransportPackage Whether the modTransportPackage object on success of false on failure
+     */
+    public function createTransport(array $data = array())
+    {
+        /** @var \modTransportPackage $package */
+        $package = $this->modx->newObject('transport.modTransportPackage');
+        $package->set('signature', $data['signature']);
+        $package->fromArray(array(
+            'created' => date('Y-m-d h:i:s'),
+            'updated' => null,
+            'state' => 1,
+            'workspace' => 1,
+            'provider' => array_key_exists('provider_id', $data) ? $data['provider_id'] : 0,
+            'source' => $data['signature'].'.transport.zip',
+            'package_name' => $data['name'],
+            'version_major' => $data['version_major'],
+            'version_minor' => $data['version_minor'],
+            'version_patch' => $data['version_patch'],
+            'release' => $data['release'],
+            'release_index' => $data['release_index'],
+        ));
+
+        if  ($package->save()) {
+            return $package;
+        }
+
+        return false;
+    }
+
+    /**
+     * Install the given package file
+     *
+     * @param string $path Absolute path to the transport package zip file
+     * @param array $options An optional array of options to be used during package installation
+     *
+     *@return boolean Whether or not the installation went fine
+     */
+    public function installLocal($path, array $options = array())
+    {
+        $data = $this->getDataFromFile($path);
+        if (empty($data)) {
+            return false;
+        }
+
+        $package = $this->createTransport($data);
+        if ($package) {
+            $installed = $package->install($options);
+            if ($installed) {
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
+
+                return true;
+            } else {
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Something went wrong while trying to install the package');
+            }
+        } else {
+            $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Could not save package '. $data['package_name']);
+        }
+
+        return false;
+    }
+
+    /**
+     * Generate some data from the given transport.zip file
+     *
+     * @param string $path The absolute data to the zip file
+     *
+     * @return array The generated data
+     */
+    public function getDataFromFile($path)
+    {
+        if (!file_exists($path)) {
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'File not found : '. $path);
+            return array();
+        }
+        $signature = basename($path, '.transport.zip');
+        // define version
+        $sig = explode('-', $signature);
+        $versionSignature = explode('.', $sig[1]);
+
+        $data = array(
+            'signature' => $signature,
+            'package_name' => $sig[0],
+            'version_major' => $versionSignature[0],
+            'version_minor' => !empty($versionSignature[1]) ? $versionSignature[1] : 0,
+            'version_patch' => !empty($versionSignature[2]) ? $versionSignature[2] : 0,
+        );
+
+        if (!empty($sig[2])) {
+            $r = preg_split('/([0-9]+)/', $sig[2], -1, PREG_SPLIT_DELIM_CAPTURE);
+            if (is_array($r) && !empty($r)) {
+                $data['release'] = $r[0];
+                $data['release_index'] = (isset($r[1]) ? $r[1] : '0');
+            } else {
+                $data['release'] = $sig[2];
+                $data['release_index'] = '';
+            }
+        }
+
+        return $data;
     }
 }
