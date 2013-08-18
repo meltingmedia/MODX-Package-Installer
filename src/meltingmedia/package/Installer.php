@@ -24,7 +24,7 @@ class Installer
      *
      * @return bool Whether or not the installation went well
      */
-    public function installPackage($providerURL, $packageName, array $options = array(), $providerURL = 'http://rest.modx.com/extras/')
+    public function installPackage($packageName, array $options = array(), $providerURL = 'http://rest.modx.com/extras/')
     {
         $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerURL);
 
