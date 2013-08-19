@@ -127,7 +127,7 @@ class Installer
                 $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url);
             }
             /** @var \modTransportProvider $provider */
-            $provider = $this->modx->getObject('transport.modTransportProvider', array('name' => $url));
+            $provider = $this->modx->getObject('transport.modTransportProvider', array('service_url' => $url));
             if ($provider) {
                 if ($this->config['debug']) {
                     $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $url . ' instantiated');
