@@ -4,21 +4,95 @@
  */
 class Installer
 {
+    /** @var \modX */
     public $modx;
+    /** @var array */
     public $config = array();
-
+    /** @var array */
     public $providers = array();
 
-    protected $currentProvider;
+    public $validOptions = array('version_major', 'version_minor', 'version_patch', 'release', 'release_index');
+
+    public $present = array();
+    public $installed = array();
+    public $failure = array();
 
     public function __construct(\modX &$modx, array $options = array())
     {
         $this->modx =& $modx;
         $this->config = array_merge(array(
             'debug' => false,
+            'local_path' => null,
         ), $options);
 
         $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
+    }
+
+    /**
+     * Perform whatever it takes with the given dependencies
+     *
+     * @param array $dependencies
+     *
+     * @return string The result of the operations
+     */
+    public function manageDependencies($dependencies = array())
+    {
+        foreach ($dependencies as $url => $data) {
+            foreach ($data as $package => $options) {
+                if ($this->isInstalled($package, $options)) {
+                    $this->present[$package] = $options;
+                    continue;
+                }
+                $this->installPackage($package, $options, $url);
+            }
+        }
+
+        return $this->displayResults();
+    }
+
+    public function displayResults()
+    {
+        return 'funky!';
+    }
+
+    /**
+     * Check whether or not the given package is already installed
+     *
+     * @param string $name The package name
+     * @param array $options Options to be used to install the package
+     *
+     * @return bool
+     */
+    public function isInstalled($name, $options = array())
+    {
+        $criteria = array_merge(array(
+            'package_name' => $name,
+            'installed!=' => null,
+        ), $this->filterOptions($options));
+
+        /** @var \modTransportPackage $object */
+        $object = $this->modx->getObject('modTransportPackage', $criteria);
+
+        return $object instanceof \modTransportPackage;
+    }
+
+    /**
+     * Filters the options to only use useful data for installation
+     *
+     * @param array $options The whole options array
+     *
+     * @return array The filtered data
+     */
+    protected function filterOptions($options = array())
+    {
+        $result = array();
+        foreach ($options as $k => $v) {
+            if (in_array($k, $this->validOptions)) {
+                $result[$k] = $v;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -39,7 +113,15 @@ class Installer
 
         // Instantiate the provider if needed
         if (!array_key_exists($providerURL, $this->providers)) {
-            $this->initProvider($providerURL);
+            $loaded = $this->initProvider($providerURL);
+            if (!$loaded) {
+                $msg = 'Error while trying to load the provider ' . $providerURL . '. Skipping its packages';
+                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                $options['failure_msg'] = $msg;
+                $this->failure[$packageName] = $options;
+
+                return false;
+            }
         }
 
         /** @var $provider \modTransportProvider */
@@ -62,16 +144,6 @@ class Installer
             foreach($packages as $package) {
                 $signature = (string) $package->signature;
                 if ($package->name == $packageName) {
-                    // Check if the package is already installed
-                    $exists = $this->modx->getObject('transport.modTransportPackage', array(
-                        'signature' => $signature,
-                        'installed:!=' => null,
-                    ));
-                    if ($exists) {
-                        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Package '. $exists->get('signature') .' already installed, skipping it');
-                        continue;
-                    }
-
                     // Download file
                     $this->modx->log(\modX::LOG_LEVEL_INFO, 'Downloading '. $package->signature);
                     file_put_contents(
@@ -95,11 +167,18 @@ class Installer
                         $installed = $tmpPackage->install($options);
                         if ($installed) {
                             $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
+                            $this->installed[$packageName] = $options;
                         } else {
-                            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Something went wrong while trying to install the package');
+                            $msg = 'Something went wrong while trying to install the package';
+                            $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                            $options['failure_msg'] = $msg;
+                            $this->failure[$packageName] = $options;
                         }
                     } else {
-                        $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Could not save package '. $package->name);
+                        $msg = 'Could not save package '. $package->name;
+                        $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg);
+                        $options['failure_msg'] = $msg;
+                        $this->failure[$packageName] = $options;
                     }
 
                     break;
@@ -121,6 +200,10 @@ class Installer
     {
         if ($this->config['debug']) {
             $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url);
+        }
+        if ('local' === $url) {
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'looking for local package(s)');
+            return true;
         }
         if (!$this->providers[$url] || !$this->providers[$url] instanceof \modTransportProvider) {
             if ($this->config['debug']) {
@@ -197,13 +280,20 @@ class Installer
             $installed = $package->install($options);
             if ($installed) {
                 $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
+                $this->installed[$data['package_name']] = $options;
 
                 return true;
             } else {
-                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Something went wrong while trying to install the package');
+                $msg = 'Something went wrong while trying to install the package';
+                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                $options['failure_msg'] = $msg;
+                $this->failure[$data['package_name']] = $options;
             }
         } else {
-            $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Could not save package '. $data['package_name']);
+            $msg = 'Could not save package '. $data['package_name'];
+            $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg);
+            $options['failure_msg'] = $msg;
+            $this->failure[$data['package_name']] = $options;
         }
 
         return false;
