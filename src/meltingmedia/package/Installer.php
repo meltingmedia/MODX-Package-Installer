@@ -11,11 +11,18 @@ class Installer
     /** @var array */
     public $providers = array();
 
-    public $validOptions = array('version_major', 'version_minor', 'version_patch', 'release', 'release_index');
+    public $validOptions = array(
+        'version_major','version_major:=','version_major:>=','version_major:>','version_major:<','version_major:<=','version_major:!=',
+        'version_minor',
+        'version_patch',
+        'release',
+        'release_index');
 
     public $present = array();
     public $installed = array();
     public $failure = array();
+
+    public $productVersion;
 
     public function __construct(\modX &$modx, array $options = array())
     {
@@ -23,6 +30,7 @@ class Installer
         $this->config = array_merge(array(
             'debug' => false,
             'local_path' => null,
+            'log_target' => '',
         ), $options);
 
         $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
@@ -37,6 +45,9 @@ class Installer
      */
     public function manageDependencies($dependencies = array())
     {
+        $this->modx->getVersionData();
+        $this->productVersion = $this->modx->version['code_name'].'-'.$this->modx->version['full_version'];
+
         foreach ($dependencies as $url => $data) {
             foreach ($data as $package => $options) {
                 if ($this->isInstalled($package, $options)) {
@@ -52,7 +63,19 @@ class Installer
 
     public function displayResults()
     {
-        return 'funky!';
+        $msg = '';
+        $types = array(
+            'failure', 'present', 'installed',
+        );
+        foreach ($types as $type) {
+            if (!empty($this->$type)) {
+                foreach ($this->$type as $name => $options) {
+                    $msg .= $name . ' '.$type. "\n";
+                }
+            }
+        }
+
+        return $msg;
     }
 
     /**
@@ -67,8 +90,10 @@ class Installer
     {
         $criteria = array_merge(array(
             'package_name' => $name,
-            'installed!=' => null,
+            'installed:!=' => null,
         ), $this->filterOptions($options));
+
+        $this->modx->log(\modX::LOG_LEVEL_INFO, print_r($criteria, true));
 
         /** @var \modTransportPackage $object */
         $object = $this->modx->getObject('modTransportPackage', $criteria);
@@ -106,7 +131,7 @@ class Installer
      */
     public function installPackage($packageName, array $options = array(), $providerURL = 'http://rest.modx.com/extras/')
     {
-        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerURL);
+        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerURL ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
         if ('local' === $providerURL) {
             return $this->installLocal($packageName, $options);
         }
@@ -116,7 +141,7 @@ class Installer
             $loaded = $this->initProvider($providerURL);
             if (!$loaded) {
                 $msg = 'Error while trying to load the provider ' . $providerURL . '. Skipping its packages';
-                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                 $options['failure_msg'] = $msg;
                 $this->failure[$packageName] = $options;
 
@@ -130,22 +155,26 @@ class Installer
 
         /** @var \modRestResponse $response */
         $response = $provider->request('package', 'GET', array(
-            'query' => $packageName
+            'query' => $packageName,
+//            'supports' => $this->productVersion,
+//            'revolution_version' => $this->productVersion,
+//            'database' => $this->modx->config['dbtype'],
+            'php' => XPDO_PHP_VERSION,
         ));
         if ($response->isError()) {
-            $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Bad response from the provider, let\'s break everything!!');
+            $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Bad response from the provider, let\'s break everything!!' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
             return false;
         }
 
         if (!empty($response)) {
             $packages = simplexml_load_string($response->response);
-            $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider');
+            $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
 
             foreach($packages as $package) {
                 $signature = (string) $package->signature;
                 if ($package->name == $packageName) {
                     // Download file
-                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Downloading '. $package->signature);
+                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Downloading '. $package->signature ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                     file_put_contents(
                         $this->modx->getOption('core_path') .'packages/'. $package->signature.'.transport.zip',
                         file_get_contents($package->location)
@@ -166,17 +195,17 @@ class Installer
                     if ($tmpPackage) {
                         $installed = $tmpPackage->install($options);
                         if ($installed) {
-                            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
+                            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                             $this->installed[$packageName] = $options;
                         } else {
                             $msg = 'Something went wrong while trying to install the package';
-                            $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                            $this->modx->log(\modX::LOG_LEVEL_INFO, $msg ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                             $options['failure_msg'] = $msg;
                             $this->failure[$packageName] = $options;
                         }
                     } else {
                         $msg = 'Could not save package '. $package->name;
-                        $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg);
+                        $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                         $options['failure_msg'] = $msg;
                         $this->failure[$packageName] = $options;
                     }
@@ -199,21 +228,21 @@ class Installer
     public function initProvider($url)
     {
         if ($this->config['debug']) {
-            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url);
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
         }
         if ('local' === $url) {
-            $this->modx->log(\modX::LOG_LEVEL_INFO, 'looking for local package(s)');
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'looking for local package(s)' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
             return true;
         }
         if (!$this->providers[$url] || !$this->providers[$url] instanceof \modTransportProvider) {
             if ($this->config['debug']) {
-                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url);
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
             }
             /** @var \modTransportProvider $provider */
             $provider = $this->modx->getObject('transport.modTransportProvider', array('service_url' => $url));
             if ($provider) {
                 if ($this->config['debug']) {
-                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $url . ' instantiated');
+                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $url . ' instantiated' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                 }
                 $this->providers[$url] =& $provider;
 
@@ -222,6 +251,7 @@ class Installer
 
             return false;
         }
+        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Getting Provider '. $url . ' instance' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
 
         return true;
     }
@@ -266,7 +296,7 @@ class Installer
      * @param string $path Absolute path to the transport package zip file
      * @param array $options An optional array of options to be used during package installation
      *
-     *@return boolean Whether or not the installation went fine
+     * @return boolean Whether or not the installation went fine
      */
     public function installLocal($path, array $options = array())
     {
@@ -279,19 +309,19 @@ class Installer
         if ($package) {
             $installed = $package->install($options);
             if ($installed) {
-                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful');
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful' ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                 $this->installed[$data['package_name']] = $options;
 
                 return true;
             } else {
                 $msg = 'Something went wrong while trying to install the package';
-                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg);
+                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
                 $options['failure_msg'] = $msg;
                 $this->failure[$data['package_name']] = $options;
             }
         } else {
             $msg = 'Could not save package '. $data['package_name'];
-            $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg);
+            $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
             $options['failure_msg'] = $msg;
             $this->failure[$data['package_name']] = $options;
         }
@@ -309,7 +339,7 @@ class Installer
     public function getDataFromFile($path)
     {
         if (!file_exists($path)) {
-            $this->modx->log(\modX::LOG_LEVEL_INFO, 'File not found : '. $path);
+            $this->modx->log(\modX::LOG_LEVEL_INFO, 'File not found : '. $path ."\n", $this->config['log_target'], __METHOD__, __FILE__, __LINE__);
             return array();
         }
         $signature = basename($path, '.transport.zip');
