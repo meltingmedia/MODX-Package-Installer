@@ -1,29 +1,39 @@
 <?php namespace meltingmedia\package;
 
+/**
+ * Service class to search packages across providers (and locally) as well as install packages
+ */
 class Package extends Service
 {
     /**
-     * Wrapper method to install a transport package
+     * Wrapper method to launch a search on a provider and install the package if found
      *
-     * @param string $packageName The package name you want to install
-     * @param array $options An optional array of options to be used during package installation
-     *
-     * @return bool Whether or not the installation went well
+     * @return bool Whether or not the operation went well
      */
-    public function installPackage($packageName, array $options)
+    public function searchAndInstall()
     {
-        $providerUrl = 'http://rest.modx.com/extras/';
-        if (array_key_exists('provider', $options) && !empty($options['provider'])) {
-            $providerUrl = $options['provider'];
+        $response = $this->search();
+        if ($response && !empty($response)) {
+            return $this->iterate($response);
         }
-        $requiredVersion = $options['version'];
 
-        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Trying to install package '. $packageName .' from '. $providerUrl, $this->config['log_target']);
+        return false;
+    }
 
-        // @todo handle local files (ie. shipped within the transport package
-//        if ('local' === $providerURL) {
-//            return $this->installLocal($packageName, $options);
-//        }
+    /**
+     * Query a provider for the current dependency
+     *
+     * @return bool|\modRestResponse False on query failure, or the provider response
+     */
+    public function search()
+    {
+        $packageName = $this->getDependency('package_name');
+
+        $providerUrl = 'http://rest.modx.com/extras/';
+        $specifiedProvider = $this->getDependency('provider');
+        if ($specifiedProvider && !empty($specifiedProvider)) {
+            $providerUrl = $specifiedProvider;
+        }
 
         // Get the provider
         /** @var Provider $providerService */
@@ -35,56 +45,74 @@ class Package extends Service
         }
 
         /** @var \modRestResponse $response */
-        $response = $providerService->query($packageName);
+        return $providerService->query($packageName);
+    }
 
-        // Iterate through the results, if any
-        if ($response && !empty($response)) {
-            $packages = simplexml_load_string($response->response);
-            $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider', $this->config['log_target']);
+    /**
+     * Iterate results of the provider response
+     * @param \modRestResponse $response
+     *
+     * @return bool
+     */
+    public function iterate(\modRestResponse $response)
+    {
+        $packageName = $this->getDependency('package_name');
+        $requiredVersion = $this->getDependency('package_version');
+        $options = $this->getDependency('options');
 
-            foreach ($packages as $package) {
-                if ($package->name == $packageName || $package->name == strtolower($packageName)) {
+        /** @var Provider $providerService */
+        $providerService = $this->getService('Provider');
+        $provider = $providerService->getCurrent();
 
-                    $signature = (string) $package->signature;
-                    $current = (string) $package->version;
+        $packages = simplexml_load_string($response->response);
+        $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider', $this->config['log_target']);
 
-                    if (!$this->installer->satisfies($current, $requiredVersion)) {
-                        // Not a correct version, keep iterating
-                        continue;
-                    }
+        foreach ($packages as $package) {
+            if ($package->name == $packageName || $package->name == strtolower($packageName)) {
 
-                    // Download file
-                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Downloading '. $package->signature, $this->config['log_target']);
-                    file_put_contents(
-                        $this->modx->getOption('core_path') .'packages/'. $package->signature.'.transport.zip',
-                        file_get_contents($package->location)
-                    );
-
-                    $data = array(
-                        'signature' => $signature,
-                        'provider_id' => $provider->get('id'),
-                        'package_name' => $package->name,
-                        'version_major' => $package->version_major,
-                        'version_minor' => $package->version_minor,
-                        'version_patch' => $package->version_patch,
-                        'release' => $package->vrelease,
-                        'release_index' => $package->vrelease_index,
-                    );
-
-                    $tmpPackage = $this->createTransport($data);
-                    if ($tmpPackage) {
-                        return $this->install($tmpPackage, $options);
-                    } else {
-                        $msg = 'Could not save package '. $package->name;
-                        $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
-                        $options['failure_msg'] = $msg;
-                        $this->failure[$packageName] = $options;
-                    }
-
-                    break;
+                // Make sure the result indeed satisfies the requirements
+                $signature = (string) $package->signature;
+                $current = (string) $package->version;
+                if (!$this->installer->satisfies($current, $requiredVersion)) {
+                    // Not a correct version, keep iterating
+                    continue;
                 }
+
+                // Download file
+                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Downloading '. $signature, $this->config['log_target']);
+                file_put_contents(
+                    $this->modx->getOption('core_path') .'packages/'. $signature.'.transport.zip',
+                    file_get_contents($package->location)
+                );
+
+                // Create the transport package
+                $data = array(
+                    'signature' => $signature,
+                    'provider_id' => $provider->get('id'),
+                    'package_name' => $package->name,
+                    'version_major' => $package->version_major,
+                    'version_minor' => $package->version_minor,
+                    'version_patch' => $package->version_patch,
+                    'release' => $package->vrelease,
+                    'release_index' => $package->vrelease_index,
+                );
+
+                $transport = $this->createTransport($data);
+                if ($transport) {
+                    // Install it
+                    return $this->install($transport, $options);
+                }
+
+                $msg = 'Could not save package '. $package->name;
+                $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
+                $this->addMessage($msg);
+
+                return false;
             }
         }
+
+        $msg = 'No package found for this provider';
+        $this->addMessage($msg);
 
         return false;
     }
@@ -94,7 +122,7 @@ class Package extends Service
      *
      * @param array $data An array of data to be used to create the modTransportPackage object
      *
-     * @return bool|\modTransportPackage Whether the modTransportPackage object on success of false on failure
+     * @return bool|\modTransportPackage Whether the modTransportPackage object on success or false on failure
      */
     public function createTransport(array $data = array())
     {
@@ -132,6 +160,14 @@ class Package extends Service
         return false;
     }
 
+    /**
+     * Install the given transport package
+     *
+     * @param \modTransportPackage $package
+     * @param array $options
+     *
+     * @return bool
+     */
     public function install(\modTransportPackage &$package, $options = array())
     {
         if ($package->getTransport()) {
@@ -155,6 +191,8 @@ class Package extends Service
             $msg = 'Something went wrong while trying to install the package';
             $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
             $this->addMessage($msg);
+
+            return false;
         }
 
         $msg = 'Unable to get the transport package';
@@ -164,6 +202,11 @@ class Package extends Service
         return false;
     }
 
+
+
+
+
+    // @TODO
     /**
      * Install the given package file
      *
@@ -181,18 +224,7 @@ class Package extends Service
 
         $package = $this->createTransport($data);
         if ($package) {
-            $installed = $package->install($options);
-            if ($installed) {
-                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installation successful', $this->config['log_target']);
-                $this->installed[$data['package_name']] = $options;
-
-                return true;
-            } else {
-                $msg = 'Something went wrong while trying to install the package';
-                $this->modx->log(\modX::LOG_LEVEL_INFO, $msg, $this->config['log_target']);
-                $options['failure_msg'] = $msg;
-                $this->failure[$data['package_name']] = $options;
-            }
+            return $this->install($package, $options);
         } else {
             $msg = 'Could not save package '. $data['package_name'];
             $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);

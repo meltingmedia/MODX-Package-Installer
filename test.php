@@ -11,7 +11,7 @@ $classes = array(
     'Installer', 'Service', 'Provider', 'Package', 'Validator'
 );
 foreach ($classes as $class) {
-    $file = "/home/www/labo/installer/src/meltingmedia/package/{$class}.php";
+    $file = dirname(__FILE__) . "/{$class}.php";
     if (file_exists($file)) {
         require_once $file;
     }
@@ -21,7 +21,8 @@ $target = 'ECHO';
 
 // 2.3 format
 $dependencies = array(
-//    'php' => '>=5.3.3',
+    //'php' => '>=5.3.3',
+//    'php' => '>=5.5',
 //    'modx' => '>=2.2.10',
     'mxFormBuilder' => '>=1.0.0-rc5',
     'tagManager' => '*',
@@ -51,7 +52,7 @@ if (!empty($dependencies)) {
         'log_target' => $target
     ));
 
-    $modx->log(modX::LOG_LEVEL_INFO, 'Installing dependencies...'."\n", $target);
+    $modx->log(modX::LOG_LEVEL_INFO, 'Validating dependencies...'."\n", $target);
 
     $result = $installer->manageDependencies($dependencies, $options);
 

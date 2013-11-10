@@ -18,13 +18,26 @@ abstract class Service
         ), $installer->config);
     }
 
+    /**
+     * @param string $msg
+     */
     public function addMessage($msg)
     {
         $this->installer->addMessage($msg);
     }
 
+    /**
+     * @param string $class
+     *
+     * @return Service
+     */
     public function getService($class)
     {
         return $this->installer->getService($class);
+    }
+
+    public function getDependency($key)
+    {
+        return $this->installer->getDependency($key);
     }
 }

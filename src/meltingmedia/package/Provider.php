@@ -1,5 +1,8 @@
 <?php namespace meltingmedia\package;
 
+/**
+ * Service class to instantiate and search providers
+ */
 class Provider extends Service
 {
     /**
@@ -22,7 +25,6 @@ class Provider extends Service
     protected function find($url)
     {
         if (!array_key_exists($url, $this->providers)) {
-            // @todo search for it
             $loaded = $this->init($url);
             if (!$loaded) {
                 $this->providers[$url] = null;
@@ -58,6 +60,14 @@ class Provider extends Service
     }
 
     /**
+     * @return \modTransportProvider|null
+     */
+    public function getCurrent()
+    {
+        return $this->current;
+    }
+
+    /**
      * Query the current provider for the given package name
      *
      * @param string $query The package name to look for
@@ -84,7 +94,7 @@ class Provider extends Service
             return $response;
         }
 
-        // @todo iterate over all providers
+        $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Trying to query a not instantiated provider', $this->config['log_target']);
 
         return false;
     }
