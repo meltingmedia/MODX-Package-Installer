@@ -50,7 +50,7 @@ class Installer
      * @param array $dependencies
      * @param array $options
      *
-     * @return string The result of the operations
+     * @return bool|string The result of the operations
      */
     public function manageDependencies($dependencies = array(), array $options = array())
     {
@@ -70,7 +70,7 @@ class Installer
                     $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
                     $this->addMessage($msg);
 
-                    return $this->getMessages();
+                    return false;
                 }
                 continue;
             }
@@ -88,7 +88,7 @@ class Installer
             // Search within the provider
             if (!$packageService->searchAndInstall()) {
                 // No result found or install failure, let's stop
-                return $this->getMessages();
+                return false;
             }
         }
 
