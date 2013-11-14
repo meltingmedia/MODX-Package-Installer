@@ -28,6 +28,7 @@ class Package extends Service
     public function search()
     {
         $packageName = $this->getDependency('package_name');
+        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Searching for package '. $packageName);
 
         $providerUrl = 'http://rest.modx.com/extras/';
         $specifiedProvider = $this->getDependency('provider');
@@ -68,7 +69,7 @@ class Package extends Service
         $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider', $this->config['log_target']);
 
         foreach ($packages as $package) {
-            if ($package->name == $packageName || $package->name == strtolower($packageName)) {
+            if (strtolower($package->name) == strtolower($packageName)) {
 
                 // Make sure the result indeed satisfies the requirements
                 $signature = (string) $package->signature;
@@ -100,6 +101,7 @@ class Package extends Service
                 $transport = $this->createTransport($data);
                 if ($transport) {
                     // Install it
+                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Installing '. $package->name);
                     return $this->install($transport, $options);
                 }
 
@@ -111,7 +113,8 @@ class Package extends Service
             }
         }
 
-        $msg = 'No package found for this provider';
+        $msg = $packageName .' not found in the given provider';
+        $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg);
         $this->addMessage($msg);
 
         return false;
