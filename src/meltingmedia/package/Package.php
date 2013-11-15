@@ -66,6 +66,7 @@ class Package extends Service
         $provider = $providerService->getCurrent();
 
         $packages = simplexml_load_string($response->response);
+        $this->modx->log(\modX::LOG_LEVEL_INFO, '//---', $this->config['log_target']);
         $this->modx->log(\modX::LOG_LEVEL_INFO, count($packages) . ' package(s) found on the Provider', $this->config['log_target']);
 
         foreach ($packages as $package) {
@@ -186,6 +187,8 @@ class Package extends Service
             if ($installed) {
                 $msg = $package->get('package_name') . '  successfully installed';
                 $this->modx->log(\modX::LOG_LEVEL_INFO, $msg, $this->config['log_target']);
+                $this->modx->log(\modX::LOG_LEVEL_INFO, '//---', $this->config['log_target']);
+                $this->modx->log(\modX::LOG_LEVEL_INFO, '&nbsp;', $this->config['log_target']);
                 $this->addMessage($msg);
 
                 return true;
