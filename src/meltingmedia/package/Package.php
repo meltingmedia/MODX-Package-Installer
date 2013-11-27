@@ -90,7 +90,7 @@ class Package extends Service
                 // Create the transport package
                 $data = array(
                     'signature' => $signature,
-                    'provider_id' => $provider->get('id'),
+                    'provider' => $provider->get('id'),
                     'package_name' => $package->name,
                     'version_major' => $package->version_major,
                     'version_minor' => $package->version_minor,
