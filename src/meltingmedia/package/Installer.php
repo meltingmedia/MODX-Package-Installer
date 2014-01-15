@@ -23,7 +23,7 @@ class Installer
         $this->config = array_merge(array(
             'debug' => false,
             'local_path' => null,
-            'log_target' => 'ECHO',
+            'log_target' => 'FILE',
         ), $options);
 
         $this->modx->addPackage('modx.transport', $this->modx->getOption('core_path') . 'model/');
