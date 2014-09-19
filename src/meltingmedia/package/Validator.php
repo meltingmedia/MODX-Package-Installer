@@ -83,6 +83,8 @@ class Validator extends Service
         ));
         $c->limit(1);
 
+        return $this->modx->getCount('modTransportPackage', $c) === 1;
+
         /** @var \modTransportPackage $object */
         $object = $this->modx->getObject('modTransportPackage', $c);
 

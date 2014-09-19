@@ -4,15 +4,23 @@
  */
 class Installer
 {
-    /** @var \modX */
+    /**
+     * @var \modX
+     */
     public $modx;
-    /** @var array */
+    /**
+     * @var array
+     */
     public $config = array();
 
-    /** @var array */
+    /**
+     * @var array
+     */
     protected $services = array();
 
-    /** @var array */
+    /**
+     * @var array
+     */
     public $currentDependency = array();
 
     public $messages = array();
