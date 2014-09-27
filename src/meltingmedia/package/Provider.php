@@ -6,11 +6,15 @@
 class Provider extends Service
 {
     /**
+     * Store of already resolved/instantiated providers
+     *
      * @var array An array of instantiated modTransportProvider
      */
     protected $providers = array();
 
     /**
+     * Currently processed provider
+     *
      * @var \modTransportProvider|null
      */
     protected $current;
