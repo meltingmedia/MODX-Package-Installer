@@ -71,7 +71,6 @@ class Package extends Service
 
         foreach ($packages as $package) {
             if (strtolower($package->name) == strtolower($packageName)) {
-
                 // Make sure the result indeed satisfies the requirements
                 $signature = (string) $package->signature;
                 $current = (string) $package->version;
@@ -157,7 +156,7 @@ class Package extends Service
 //            'release_index' => $data['release_index'],
 //        ));
 
-        if  ($package->save()) {
+        if ($package->save()) {
             return $package;
         }
 

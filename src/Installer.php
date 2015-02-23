@@ -1,4 +1,5 @@
 <?php namespace meltingmedia\modx\package;
+
 /**
  * Service class to help install packages from your MODX component setup
  */
@@ -45,7 +46,7 @@ class Installer
     public function getService($class)
     {
         if (!array_key_exists($class, $this->services)) {
-            $className = '\meltingmedia\package\\' . $class;
+            $className = '\meltingmedia\modx\package\\' . $class;
             $this->services[$class] = new $className($this);
         }
 
@@ -169,7 +170,6 @@ class Installer
      */
     public static function satisfies($toTest, $required)
     {
-        return \meltingmedia\package\Validator::satisfies($toTest, $required);
+        return \meltingmedia\modx\package\Validator::satisfies($toTest, $required);
     }
-
 }
