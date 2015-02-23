@@ -46,7 +46,7 @@ $options = array(
 );
 
 if (!empty($dependencies)) {
-    $installer = new meltingmedia\package\Installer($modx, array(
+    $installer = new meltingmedia\modx\package\Installer($modx, array(
         'debug' => true,
         'local_path' => '',
         'log_target' => $target
@@ -62,4 +62,3 @@ if (!empty($dependencies)) {
 }
 
 return 'No deps given!';
-

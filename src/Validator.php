@@ -1,4 +1,4 @@
-<?php namespace meltingmedia\package;
+<?php namespace meltingmedia\modx\package;
 
 /**
  * Service class to help validate requirements
