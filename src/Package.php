@@ -75,8 +75,19 @@ class Package extends Service
                 $signature = (string) $package->signature;
                 $current = (string) $package->version;
                 if (!$this->installer->satisfies($current, $requiredVersion)) {
-                    // Not a correct version, keep iterating
-                    continue;
+                    // @TODO Latest version does not satisfy the requirements, test for "versions" support of the provider
+                    $versions = $providerService->getVersions($package->name);
+                    if ($versions) {
+                        foreach ($versions as $test) {
+                            if ($this->installer->satisfies($test->version, $requiredVersion)) {
+                                $signature = (string) $test->signature;
+                                $package = $test;
+                                break;
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
                 }
 
                 // Download file

@@ -42,7 +42,7 @@ class Provider extends Service
         }
 
         $this->current = $this->providers[$url];
-        $this->current->getClient();
+        //$this->current->getClient();
 
         return $this->current;
     }
@@ -85,6 +85,35 @@ class Provider extends Service
             $response = $this->current->request('package', 'GET', array(
                 'query' => $query,
                 'php' => XPDO_PHP_VERSION,
+            ));
+
+            if ($response->isError()) {
+                $msg = 'Bad response from the provider, let\'s break everything!!';
+                $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
+                $this->addMessage($msg);
+
+                return false;
+            }
+
+            return $response;
+        }
+
+        $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Trying to query a not instantiated provider', $this->config['log_target']);
+
+        return false;
+    }
+
+    /**
+     * @param $packageName
+     *
+     * @return bool|\modRestResponse
+     */
+    public function getVersions($packageName)
+    {
+        if ($this->current instanceof \modTransportProvider) {
+            /** @var \modRestResponse  $response */
+            $response = $this->current->request('package/versions', 'GET', array(
+                'package' => $packageName,
             ));
 
             if ($response->isError()) {

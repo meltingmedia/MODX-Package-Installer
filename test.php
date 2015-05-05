@@ -26,6 +26,7 @@ $dependencies = array(
 //    'modx' => '>=2.2.10',
     'mxFormBuilder' => '>=1.0.0-rc5',
     'tagManager' => '*',
+    'getResources' => '>1.5.1-pl,<1.6.0-pl',
 //    'Babel' => '~2.3',
 //    'OvoHBS' => '>=0.4',
 );
