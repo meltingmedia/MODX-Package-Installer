@@ -1,5 +1,5 @@
 {
-    "name": "Melting/MODX/Package",
+    "name": "melting/modx/package",
     "description": "Helper to install MODX packages from providers or from local packages.",
     "type": "library",
     "keywords": ["modx", "helper", "package"],
