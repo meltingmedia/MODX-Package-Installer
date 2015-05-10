@@ -1,175 +1,234 @@
-<?php namespace meltingmedia\modx\package;
+<?php namespace Melting\MODX\Package;
 
-/**
- * Service class to instantiate and search providers
- */
-class Provider extends Service
+use modX;
+use modTransportProvider;
+
+class Provider
 {
     /**
-     * Store of already resolved/instantiated providers
-     *
-     * @var array An array of instantiated modTransportProvider
+     * @var modX
      */
-    protected $providers = array();
-
+    public $modx;
     /**
-     * Currently processed provider
-     *
-     * @var \modTransportProvider|null
+     * @var modTransportProvider
      */
-    protected $current;
-
+    protected $provider;
     /**
-     * Find a modTransportProvider with the given service_url
+     * Whether or not the provider supports listing package version
      *
-     * @param string $url
+     * @see Provider::supportsVersions()
      *
-     * @return bool|\modTransportProvider
+     * @var null|bool
      */
-    protected function find($url)
+    protected $versions = null;
+
+    public function __construct(modX $modx, array $data = array())
     {
-        if (!array_key_exists($url, $this->providers)) {
-            $loaded = $this->init($url);
-            if (!$loaded) {
-                $this->providers[$url] = null;
-
-                $msg = 'Error while trying to load the provider ' . $url;
-                //$this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
-                $this->addMessage($msg);
-
-                return false;
-            }
-        }
-
-        $this->current = $this->providers[$url];
-        //$this->current->getClient();
-
-        return $this->current;
+        $this->modx = $modx;
     }
 
     /**
-     * Get the modTransportProvider using the given service_url
+     * Set the modTransportProvider for this Provider
      *
-     * @param string $url
+     * @param modTransportProvider $provider
      *
-     * @return \modTransportProvider|null
+     * @return bool Whether or not the provider is usable/verified
      */
-    public function get($url)
+    public function fromProvider(modTransportProvider $provider)
     {
-        if (!($this->current instanceof \modTransportProvider) || $this->current->get('service_url') != $url) {
-            $this->find($url);
-        }
+        $this->provider = $provider;
 
-        return $this->current;
+        return $this->verify();
     }
 
     /**
-     * @return \modTransportProvider|null
+     * Retrieve/create a modTransportProvider from the given data
+     *
+     * @param array $data
+     *
+     * @return bool Whether or not the provider is usable/verified
      */
-    public function getCurrent()
+    public function fromArray(array $data)
     {
-        return $this->current;
+        $this->modx->log(modX::LOG_LEVEL_INFO, 'Populating provider from array with data '. print_r($data, true));
+        // First try to grab an existing provider
+        $this->provider = $this->modx->getObject('transport.modTransportProvider', $data);
+        if (!$this->provider instanceof modTransportProvider) {
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Creating a new provider...');
+            // Then create it
+            $this->provider = $this->modx->newObject('transport.modTransportProvider');
+            $this->provider->fromArray($data, '', true);
+        } else {
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Existing provider found');
+        }
+
+        return $this->verify();
     }
 
     /**
-     * Query the current provider for the given package name
+     * Search the given package from the provider
      *
-     * @param string $query The package name to look for
+     * @param string $name
+     * @param array $options
      *
-     * @return bool|\modRestResponse
+     * @return Package|void
      */
-    public function query($query)
+    public function search($name, array $options = array())
     {
-        if ($this->current instanceof \modTransportProvider) {
-            /** @var \modRestResponse  $response */
-            $response = $this->current->request('package', 'GET', array(
-                'query' => $query,
-                'php' => XPDO_PHP_VERSION,
-            ));
-
-            if ($response->isError()) {
-                $msg = 'Bad response from the provider, let\'s break everything!!';
-                $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
-                $this->addMessage($msg);
-
-                return false;
-            }
-
-            return $response;
+        $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . " Searching provider with regular query {$name} ". print_r($options, true));
+        $response = $this->request('package', array(
+            'query' => $name,
+        ));
+        if (!$response) {
+            $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . ' no response');
+            return;
         }
 
-        $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Trying to query a not instantiated provider', $this->config['log_target']);
+        if ($response->isError()) {
+            // Return/log error
+            $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . ' response with error');
+            return;
+        }
+        //$response->modx = null;
+        //$response->client = null;
+        //$this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . ' loading response '. print_r($response, true));
 
-        return false;
+        $packages = simplexml_load_string($response->response);
+        /** @var \simpleXMLElement $xml */
+        foreach ($packages as $xml) {
+            $package = new Package($this->modx);
+            $package->setProvider($this)->fromXml($xml);
+
+            if ($package->matches($name, $options)) {
+                $this->modx->log(modX::LOG_LEVEL_INFO, 'Found');
+                return $package;
+            }
+        }
+        $this->modx->log(modX::LOG_LEVEL_INFO, 'Nada ? '. print_r($packages, true));
     }
 
     /**
-     * @param $packageName
+     * Search available versions for the provider (if supported by the provider)
      *
-     * @return bool|\modRestResponse
+     * @param $package
+     *
+     * @return \SimpleXMLElement[]
+     * @throws \Exception
      */
-    public function getVersions($packageName)
+    public function searchVersions($package)
     {
-        if ($this->current instanceof \modTransportProvider) {
-            /** @var \modRestResponse  $response */
-            $response = $this->current->request('package/versions', 'GET', array(
-                'package' => $packageName,
-            ));
-
-            if ($response->isError()) {
-                $msg = 'Bad response from the provider, let\'s break everything!!';
-                $this->modx->log(\modX::LOG_LEVEL_ERROR, $msg, $this->config['log_target']);
-                $this->addMessage($msg);
-
-                return false;
+        $this->modx->log(modX::LOG_LEVEL_INFO, 'Searching for versions...');
+        $versions = array();
+        if (!$this->supportsVersions()) {
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Provider appears not to support versions listing...');
+            return $versions;
+        }
+        $response = $this->request('package/versions', array(
+            'package' => $package
+        ));
+        if ($response && $response->response) {
+            try {
+                $packages = simplexml_load_string($response->response);
+            } catch (\Exception $e) {
+                $this->modx->log(modX::LOG_LEVEL_INFO, 'Provider appears not to support versions');
+                $packages = array();
             }
 
-            return $response;
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Found versions : '. count($packages));
+            foreach ($packages as $version) {
+                $this->modx->log(modX::LOG_LEVEL_INFO, (string) $version->display_name);
+                $versions[] = $version;
+            }
         }
 
-        $this->modx->log(\modX::LOG_LEVEL_ERROR, 'Trying to query a not instantiated provider', $this->config['log_target']);
-
-        return false;
+        return $versions;
     }
 
     /**
-     * Initialize the given Package Provider
+     * Method to "guess" if the provider supports listing package versions
      *
-     * @param string $url The provider URL
-     *
-     * @return bool Either if the initialization succeed of failed
+     * @return bool
      */
-    protected function init($url)
+    protected function supportsVersions()
     {
-        if ($this->config['debug']) {
-            $this->modx->log(\modX::LOG_LEVEL_INFO, 'Looking for provider '. $url, $this->config['log_target']);
-        }
-        if ('local' === $url) {
-            $this->modx->log(\modX::LOG_LEVEL_INFO, 'looking for local package(s)', $this->config['log_target']);
-            return true;
-        }
-        if (!$this->providers[$url] || !$this->providers[$url] instanceof \modTransportProvider) {
-            if ($this->config['debug']) {
-                $this->modx->log(\modX::LOG_LEVEL_INFO, 'Instantiating provider '. $url, $this->config['log_target']);
-            }
-            /** @var \modTransportProvider $provider */
-            $provider = $this->modx->getObject('transport.modTransportProvider', array(
-                'service_url' => $url
-            ));
-            if ($provider) {
-                if ($this->config['debug']) {
-                    $this->modx->log(\modX::LOG_LEVEL_INFO, 'Provider '. $url . ' instantiated', $this->config['log_target']);
-                }
-                $this->providers[$url] =& $provider;
+        if (is_null($this->versions)) {
+            $url = $this->provider->get('service_url') . 'package/versions';
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            curl_exec($ch);
 
-                return true;
-            }
-            $this->addMessage("modTransportProvider object with service_url {$url} not found");
+            $info = curl_getinfo($ch);
+            //$this->modx->log(modX::LOG_LEVEL_INFO, 'curl info : '. print_r($info, true));
 
+            if (isset($info['http_code']) && $info['http_code'] !== 404) {
+                // We expect response to say "method not allowed" (error 400);
+                $this->versions = true;
+            } else {
+                // Assume provider supports versions. Some providers return a 200 status while not supporting versions listing, should be harmless since we will never have results from those providers
+                $this->versions = false;
+            }
+        }
+
+        return $this->versions;
+    }
+
+    /**
+     * Convenient method to retrieve an attribute from the modTransportProvider object
+     *
+     * @param string $key
+     *
+     * @return mixed
+     */
+    public function get($key)
+    {
+        if ($this->provider) {
+            return $this->provider->get($key);
+        }
+    }
+
+    /**
+     * Check if the provider is a valid provider & is usable/up. If the modTransportProvider object is new & validates, it will be saved
+     *
+     * @param array $params
+     *
+     * @return bool
+     * @throws \Exception
+     */
+    protected function verify(array $params = array())
+    {
+        $response = $this->request('verify', $params);
+        if ($response->isError()) {
+            $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . ' error verifying provider'.' '. $this->provider->service_url);
             return false;
         }
-        $this->modx->log(\modX::LOG_LEVEL_INFO, 'Getting Provider '. $url . ' instance', $this->config['log_target']);
 
-        return true;
+        $response = simplexml_load_string($response->response);
+        $verified = (bool) $response->verified;
+        if ($verified && $this->provider->isNew()) {
+            $this->provider->save();
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Saved provider data');
+        }
+
+        return $verified;
+    }
+
+    /**
+     * Perform a request against the modTransportProvider
+     *
+     * @param string $path
+     * @param array $params
+     *
+     * @return mixed
+     * @throws \Exception
+     */
+    protected function request($path, array $params = array())
+    {
+        if (!$this->provider instanceof modTransportProvider) {
+            throw new \Exception('No modTransportProvider object is attached...');
+        }
+
+        return $this->provider->request($path, 'GET', $params);
     }
 }

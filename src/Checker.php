@@ -1,97 +1,12 @@
-<?php namespace meltingmedia\modx\package;
+<?php namespace Melting\MODX\Package;
 
 /**
- * Service class to help validate requirements
+ * An utility class to help "validate" dependencies versions
+ *
+ * Methods are "extracted" from MODX Revolution 2.4 and have been created by Jason Coward <https://github.com/opengeek>
  */
-class Validator extends Service
+class Checker
 {
-    /**
-     * Check for system requirements (ie. MODX version, PHP version)
-     *
-     * @return bool
-     */
-    public function checkSystem()
-    {
-        $name = $this->getDependency('package_name');
-        $required = $this->getDependency('package_version');
-
-        $success = true;
-        $toCheck = false;
-        switch ($name) {
-            case 'modx':
-                $v = $this->modx->getVersionData();
-                $toCheck = $v['full_version'];
-                break;
-            case 'php':
-                $toCheck = XPDO_PHP_VERSION;
-                break;
-        }
-
-        if ($toCheck) {
-            $success = $this->satisfies($toCheck, $required);
-        }
-
-        return $success;
-    }
-
-    /**
-     * Check if we have a matching version already in place
-     *
-     * @return bool
-     */
-    public function isLocalMatch()
-    {
-        $name = $this->getDependency('package_name');
-        $required = $this->getDependency('package_version');
-
-        $c = $this->modx->newQuery('modTransportPackage');
-        $c->where(array(
-            'package_name' => strtolower($name),
-            'OR:package_name:=' => $name,
-        ));
-        $c->sortby('installed', 'DESC');
-        //$c->limit(1);
-
-        $collection = $this->modx->getCollection('modTransportPackage', $c);
-
-        /** @var \modTransportPackage $candidate */
-        foreach ($collection as $candidate) {
-            $version = $candidate->getComparableVersion();
-            if ($this->satisfies($version, $required)) {
-                // We got a match
-                // @todo check if installed, if not, install it
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks whether or not a local package is present
-     *
-     * @return bool
-     */
-    public function haveLocalPackage()
-    {
-        $name = $this->getDependency('package_name');
-
-        $c = $this->modx->newQuery('modTransportPackage');
-        $c->where(array(
-            'package_name' => strtolower($name),
-            'OR:package_name:=' => $name,
-        ));
-        $c->limit(1);
-
-        return $this->modx->getCount('modTransportPackage', $c) === 1;
-
-        /** @var \modTransportPackage $object */
-        $object = $this->modx->getObject('modTransportPackage', $c);
-
-        return $object instanceof \modTransportPackage;
-    }
-
-
     /**
      * Test if a version satisfies a version constraint.
      *
@@ -146,7 +61,6 @@ class Validator extends Service
 
         return $satisfied;
     }
-
 
     /**
      * Get the next significant release version for a given version string.

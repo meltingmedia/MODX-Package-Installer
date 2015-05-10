@@ -1,5 +1,5 @@
 {
-    "name": "meltingmedia/modx/package",
+    "name": "Melting/MODX/Package",
     "description": "Helper to install MODX packages from providers or from local packages.",
     "type": "library",
     "keywords": ["modx", "helper", "package"],
@@ -17,7 +17,7 @@
     },
     "autoload": {
         "psr-4": {
-            "meltingmedia\\modx\\package\\": "src/"
+            "Melting\\MODX\\Package\\": "src/"
         }
     }
 }
