@@ -187,10 +187,9 @@ class Package
             return true;
         }
         $setup = array();
-        if (isset($options['setup'])) {
-            $setup = $options['setup'];
+        if (isset($options['setup_options'])) {
+            $setup = $options['setup_options'];
         }
-        //$this->modx->log(modX::LOG_LEVEL_INFO, print_r($this->package->toArray(), true));
 
         // First try to download
         if (!$this->isDownloaded($this->package->signature)) {
