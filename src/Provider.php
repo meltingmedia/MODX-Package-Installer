@@ -3,6 +3,9 @@
 use modX;
 use modTransportProvider;
 
+/**
+ * A wrapper for modTransportProvider
+ */
 class Provider
 {
     /**

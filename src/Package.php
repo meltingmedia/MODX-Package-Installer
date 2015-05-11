@@ -2,8 +2,15 @@
 
 use modX;
 
+/**
+ * A wrapper for modTransportPackage
+ */
 class Package
 {
+    /**
+     * @var modX
+     */
+    public $modx;
     /**
      * @var Provider
      */
@@ -13,10 +20,11 @@ class Package
      */
     protected $package;
     /**
-     * @var modX
+     * Whether or not this package could be installed
+     *
+     * @var bool
      */
-    public $modx;
-    protected $isLocal = false;
+    protected $installable = true;
 
     public function __construct(modX $modx)
     {
@@ -24,6 +32,8 @@ class Package
     }
 
     /**
+     * Link a provider object to this package
+     *
      * @param Provider $provider
      *
      * @return $this
@@ -36,6 +46,11 @@ class Package
     }
 
     /**
+     * Either retrieve an existing or create a modTransportPackage to link to this package, from the given
+     * SimpleXMLElement (most likely retrieved from a provider response)
+     *
+     * @see Package::fromArray
+     *
      * @param \SimpleXMLElement $data
      *
      * @return $this
@@ -60,6 +75,8 @@ class Package
     }
 
     /**
+     * Either retrieve an existing or create a modTransportPackage to link to this package, from the given array data
+     *
      * @param array $data
      *
      * @return $this
@@ -85,12 +102,13 @@ class Package
         // Create a new modTransportPackage record
         $this->package = $this->modx->newObject('transport.modTransportPackage');
         $this->package->fromArray($data, '', true);
-        //$this->package->save();
 
         return $this;
     }
 
     /**
+     * Link the given modTransportPackage to this package
+     *
      * @param \modTransportPackage $package
      *
      * @return $this
@@ -103,8 +121,10 @@ class Package
     }
 
     /**
-     * @param string $name
-     * @param array $options
+     * Convenient method to check if this package matches the given requirements
+     *
+     * @param string $name - The package name
+     * @param array $options - Optional options. Important one being $options[package_version]
      *
      * @return bool
      */
@@ -117,6 +137,7 @@ class Package
             return false;
         }
 
+        // A version requirement/constraint has been given, let's take care of it
         if (isset($options['package_version'])) {
             if ($options['package_version'] === '*') {
                 // We do not require a particular version, so this one fits!
@@ -154,6 +175,8 @@ class Package
     }
 
     /**
+     * Download the given package from the given URL, and store in within Revolution core/packages directory
+     *
      * @param string $signature
      * @param string $url
      *
@@ -172,6 +195,8 @@ class Package
     }
 
     /**
+     * Check whether or not the package matching the given signature has already been downloaded
+     *
      * @param string $signature
      *
      * @return bool
@@ -181,6 +206,13 @@ class Package
         return file_exists($this->modx->getOption('core_path') .'packages/'. $signature.'.transport.zip');
     }
 
+    /**
+     * Convenient method to install this package, if needed
+     *
+     * @param array $options
+     *
+     * @return bool
+     */
     public function install(array $options = array())
     {
         if ($this->isInstalled()) {
@@ -222,12 +254,27 @@ class Package
     }
 
     /**
+     * Mark this package as not installable, mostly to prevent installing a lower version than currently installed
+     *
+     * @return void
+     */
+    public function setNotInstallable()
+    {
+        $this->installable = false;
+    }
+
+    /**
      * Check whether or not this package is already installed
      *
      * @return bool
      */
     protected function isInstalled()
     {
-        return !empty($this->package->installed);
+        if ($this->installable) {
+            return !empty($this->package->installed);
+        }
+        // Package is marked as not "installable", let's consider it as installed to prevent issues
+
+        return true;
     }
 }

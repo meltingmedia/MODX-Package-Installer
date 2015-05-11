@@ -77,6 +77,9 @@ class Finder
             return;
         }
 
+        //$total = $this->modx->getCount('transport.modTransportPackage', $c);
+        $current = 1;
+        $alreadyInstalled = false;
         $results = $this->modx->getCollection('transport.modTransportPackage', $c);
         /** @var \modTransportPackage $package */
         foreach ($results as $package) {
@@ -86,15 +89,30 @@ class Finder
             }
 
             $version = $package->getComparableVersion();
-
             $this->modx->log(modX::LOG_LEVEL_INFO, "Testing version {$version} against {$options['package_version']}");
 
             // First check for perfect match
             if (Checker::satisfies($version, $options['package_version'])) {
                 $this->modx->log(modX::LOG_LEVEL_INFO, "{$version} is a match!");
-                // Installed package matches the requirements
-                return $this->createPackage($package);
+                $result = $this->createPackage($package);
+                if ($current > 1 && $alreadyInstalled) {
+                    $this->modx->log(
+                        modX::LOG_LEVEL_INFO,
+                        "But is not the latest version installed (so an higher version might be installed)"
+                    );
+                    $result->setNotInstallable();
+                }
+
+                return $result;
             }
+
+            // Check if package is installed
+            $installed = $package->get('installed');
+            if (!empty($installed)) {
+                $alreadyInstalled = true;
+            }
+
+            $current++;
         }
 
         // @TODO: No perfect match found, handle mutliple cases
