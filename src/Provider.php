@@ -78,7 +78,7 @@ class Provider
      */
     public function search($name, array $options = array())
     {
-        $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . " Searching provider with regular query {$name} ". print_r($options, true));
+        $this->modx->log(modX::LOG_LEVEL_INFO, "Searching provider with regular query {$name} ");
         $response = $this->request('package', array(
             'query' => $name,
         ));
@@ -107,7 +107,7 @@ class Provider
                 return $package;
             }
         }
-        $this->modx->log(modX::LOG_LEVEL_INFO, 'Nada ? '. print_r($packages, true));
+        //$this->modx->log(modX::LOG_LEVEL_INFO, 'Nada ? '. print_r($packages, true));
     }
 
     /**
@@ -148,36 +148,6 @@ class Provider
     }
 
     /**
-     * Method to "guess" if the provider supports listing package versions
-     *
-     * @return bool
-     */
-    protected function supportsVersions()
-    {
-        if (is_null($this->versions)) {
-            $url = $this->provider->get('service_url') . 'package/versions';
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_NOBODY, true);
-            curl_exec($ch);
-
-            $info = curl_getinfo($ch);
-            //$this->modx->log(modX::LOG_LEVEL_INFO, 'curl info : '. print_r($info, true));
-
-            if (isset($info['http_code']) && $info['http_code'] !== 404) {
-                // We expect response to say "method not allowed" (error 400);
-                $this->versions = true;
-            } else {
-                // Assume provider supports versions. Some providers return a 200 status while not supporting versions listing, should be harmless since we will never have results from those providers
-                $this->versions = false;
-            }
-        }
-
-        return $this->versions;
-    }
-
-    /**
      * Convenient method to retrieve an attribute from the modTransportProvider object
      *
      * @param string $key
@@ -192,7 +162,43 @@ class Provider
     }
 
     /**
-     * Check if the provider is a valid provider & is usable/up. If the modTransportProvider object is new & validates, it will be saved
+     * Generate a unique cache key from the given options
+     *
+     * @param array $options
+     *
+     * @return string
+     */
+    public static function getCacheKey(array $options)
+    {
+        $key = $options['provider'];
+        if (isset($options['provider_data']['username'])) {
+            $key .= "-{$options['provider_data']['username']}";
+        }
+
+        return $key;
+    }
+
+    /**
+     * Generate a unique cache key from an instantiated provider
+     *
+     * @return string
+     */
+    public function getCache()
+    {
+        $data = array(
+            'provider' => $this->provider->get('service_url')
+        );
+        $user = $this->provider->get('username');
+        if (!empty($user)) {
+            $data['provider_data']['username'] = $user;
+        }
+
+        return self::getCacheKey($data);
+    }
+
+    /**
+     * Check if the provider is a valid provider & is usable/up. If the modTransportProvider object is new & validates,
+     * it will be saved
      *
      * @param array $params
      *
@@ -203,7 +209,7 @@ class Provider
     {
         $response = $this->request('verify', $params);
         if ($response->isError()) {
-            $this->modx->log(modX::LOG_LEVEL_INFO, __METHOD__ . ' error verifying provider'.' '. $this->provider->service_url);
+            $this->modx->log(modX::LOG_LEVEL_INFO, 'Error verifying provider'.' '. $this->provider->service_url);
             return false;
         }
 
@@ -233,5 +239,36 @@ class Provider
         }
 
         return $this->provider->request($path, 'GET', $params);
+    }
+
+    /**
+     * Method to "guess" if the provider supports listing package versions
+     *
+     * @return bool
+     */
+    protected function supportsVersions()
+    {
+        if (is_null($this->versions)) {
+            $url = $this->provider->get('service_url') . 'package/versions';
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            curl_exec($ch);
+
+            $info = curl_getinfo($ch);
+            //$this->modx->log(modX::LOG_LEVEL_INFO, 'curl info : '. print_r($info, true));
+
+            if (isset($info['http_code']) && $info['http_code'] !== 404) {
+                // We expect response to say "method not allowed" (error 400);
+                $this->versions = true;
+            } else {
+                // Assume provider supports versions. Some providers return a 200 status while not supporting versions
+                // listing, should be harmless since we will never have results from those providers
+                $this->versions = false;
+            }
+        }
+
+        return $this->versions;
     }
 }
